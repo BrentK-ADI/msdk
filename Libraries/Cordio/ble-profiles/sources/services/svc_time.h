@@ -102,6 +102,8 @@ void SvcTimeAddGroup(void);
 /*************************************************************************************************/
 void SvcTimeRemoveGroup(void);
 
+void SvcTimeRegisterCback(attsReadCback_t readCback, attsWriteCback_t writeCback);
+
 /*! \} */    /* TIME-RELATED_SERVICE */
 
 #ifdef __cplusplus

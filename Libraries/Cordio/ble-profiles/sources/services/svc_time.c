@@ -154,7 +154,7 @@ static const attsAttr_t timeList[] =
     timeCtsValCt,
     (uint16_t *) &timeCtsLenCt,
     sizeof(timeCtsValCt),
-    0,
+    ATTS_SET_READ_CBACK,
     TIME_SEC_PERMIT_READ
   },
   {
@@ -178,7 +178,7 @@ static const attsAttr_t timeList[] =
     timeCtsValLoc,
     (uint16_t *) &timeCtsLenLoc,
     sizeof(timeCtsValLoc),
-    0,
+    ATTS_SET_READ_CBACK,
     TIME_SEC_PERMIT_READ
   },
   {
@@ -298,4 +298,10 @@ void SvcTimeAddGroup(void)
 void SvcTimeRemoveGroup(void)
 {
   AttsRemoveGroup(TIME_START_HDL);
+}
+
+void SvcTimeRegisterCback(attsReadCback_t readCback, attsWriteCback_t writeCback)
+{
+  svcTimeGroup.readCback = readCback;
+  svcTimeGroup.writeCback = writeCback;
 }
