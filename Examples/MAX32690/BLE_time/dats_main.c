@@ -52,6 +52,10 @@
 #include "tmr.h"
 #include "svc_sds.h"
 #include "svc_time.h"
+#include "rtc.h"
+
+#include <time.h>
+
 /**************************************************************************************************
   Macros
 **************************************************************************************************/
@@ -249,13 +253,29 @@ static dmSecLescOobCfg_t *datsOobCfg;
 wsfTimer_t trimTimer;
 
 extern void setAdvTxPower(void);
-
+static void convert_sec_to_tm(uint32_t secSince1970, struct tm *t) {}
 uint8_t timeReadCb(dmConnId_t connId, uint16_t handle, uint8_t operation, uint16_t offset,
-                           attsAttr_t *pAttr)
+                   attsAttr_t *pAttr)
 {
+    uint32_t now;
+    if (MXC_RTC_GetSeconds(&now) != E_NO_ERROR) {
+        return ATT_ERR_READ;
+    }
 
-    uint8_t data[] = {UINT16_TO_BYTES(2011), 3, 17, 14, 55, 57, 0, 0, 0};
-    memcpy(pAttr->pValue, data, sizeof(data)); 
+    struct tm *t = localtime(&now);
+    APP_TRACE_INFO3("%d:%d:%d", t->tm_hour, t->tm_min, t->tm_sec);
+
+    uint8_t timedata[] = { UINT16_TO_BYTES(t->tm_year + 1900),
+                       t->tm_mon,
+                       t->tm_mday,
+                       t->tm_hour,
+                       t->tm_min,
+                       t->tm_sec,
+                       0,
+                       0,
+                       0 };
+
+    memcpy(pAttr->pValue, timedata, sizeof(timedata));
 
     return ATT_SUCCESS;
 }
@@ -364,7 +384,7 @@ static void datsDmCback(dmEvt_t *pDmEvt)
 static void datsAttCback(attEvt_t *pEvt)
 {
     attEvt_t *pMsg;
-    APP_TRACE_INFO0("ATT CBACK");
+    
 
     if ((pMsg = WsfMsgAlloc(sizeof(attEvt_t) + pEvt->valueLen)) != NULL) {
         memcpy(pMsg, pEvt, sizeof(attEvt_t));
@@ -386,7 +406,7 @@ static void datsAttCback(attEvt_t *pEvt)
 static void datsCccCback(attsCccEvt_t *pEvt)
 {
     appDbHdl_t dbHdl;
-    APP_TRACE_INFO0("CCC CBACK");
+    
 
     /* If CCC not set from initialization and there's a device record and currently bonded */
     if ((pEvt->handle != ATT_HANDLE_NONE) &&
@@ -997,8 +1017,28 @@ void DatsHandler(wsfEventMask_t event, wsfMsgHdr_t *pMsg)
 /*************************************************************************************************/
 void DatsStart(void)
 {
-    
+    struct tm t = { .tm_hour = 12, .tm_mon = 10, .tm_year = 2023 - 1900 };
 
+    time_t nowSeconds = mktime(&t);
+
+    if (MXC_RTC_Init(&nowSeconds, 0) != E_NO_ERROR) {
+        APP_TRACE_INFO0("Failed to initialize RTC");
+    }
+
+    if (MXC_RTC_SquareWaveStart(MXC_RTC_F_512HZ) == E_BUSY) {
+        APP_TRACE_INFO0("Couldnt start clock of RTC");
+    }
+    if (MXC_RTC_Start() != E_NO_ERROR) {
+        printf("Failed RTC_Start\n");
+        printf("Example Failed\n");
+
+        while (1) {}
+    }
+
+    uint32_t now;
+    if (MXC_RTC_GetSeconds(&now) != E_NO_ERROR) {
+        APP_TRACE_INFO0("Failed to read RTC");
+    }
     /* Register for stack callbacks */
     DmRegister(datsDmCback);
     DmConnRegister(DM_CLIENT_ID_APP, datsDmCback);
@@ -1009,10 +1049,10 @@ void DatsStart(void)
     /* Initialize attribute server database */
     SvcCoreGattCbackRegister(GattReadCback, GattWriteCback);
     SvcCoreAddGroup();
-    
+
     SvcTimeRegisterCback(timeReadCb, NULL);
     SvcTimeAddGroup();
-    
+
     /* Register for app framework button callbacks */
     AppUiBtnRegister(datsBtnCback);
 

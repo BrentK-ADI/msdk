@@ -58,6 +58,7 @@
 
 #include "dats_api.h"
 #include "app_ui.h"
+#include <time.h>
 
 /**************************************************************************************************
   Macros
@@ -189,6 +190,8 @@ void setAdvTxPower(void)
 /*************************************************************************************************/
 int main(void)
 {
+
+
 #if defined(HCI_TR_EXACTLE) && (HCI_TR_EXACTLE == 1)
     /* Configurations must be persistent. */
     static BbRtCfg_t mainBbRtCfg;
