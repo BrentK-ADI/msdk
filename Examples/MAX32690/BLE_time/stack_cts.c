@@ -26,7 +26,7 @@
 #include "wsf_os.h"
 #include "util/bstream.h"
 
-#include "dats_api.h"
+#include "cts_api.h"
 #include "wdxs/wdxs_api.h"
 
 #include "hci_handler.h"
@@ -51,7 +51,7 @@
  *  \return     None.
  */
 /*************************************************************************************************/
-void StackInitDats(void)
+void StackInitCts(void)
 {
     wsfHandlerId_t handlerId;
 
@@ -92,6 +92,6 @@ void StackInitDats(void)
     handlerId = WsfOsSetNextHandler(AppHandler);
     AppHandlerInit(handlerId);
 
-    handlerId = WsfOsSetNextHandler(DatsHandler);
-    DatsHandlerInit(handlerId);
+    handlerId = WsfOsSetNextHandler(CtsHandler);
+    CtsHandlerInit(handlerId);
 }

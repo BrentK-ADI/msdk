@@ -21,8 +21,8 @@
  *  limitations under the License.
  */
 /*************************************************************************************************/
-#ifndef EXAMPLES_MAX32690_BLE_DATS_DATS_API_H_
-#define EXAMPLES_MAX32690_BLE_DATS_DATS_API_H_
+#ifndef EXAMPLES_MAX32690_BLE_CTS_CTS_API_H_
+#define EXAMPLES_MAX32690_BLE_CTS_CTS_API_H_
 
 #include "wsf_os.h"
 
@@ -40,7 +40,7 @@ extern "C" {
  *  \return None.
  */
 /*************************************************************************************************/
-void DatsStart(void);
+void CtsStart(void);
 
 /*************************************************************************************************/
 /*!
@@ -51,7 +51,7 @@ void DatsStart(void);
  *  \return None.
  */
 /*************************************************************************************************/
-void DatsHandlerInit(wsfHandlerId_t handlerId);
+void CtsHandlerInit(wsfHandlerId_t handlerId);
 
 /*************************************************************************************************/
 /*!
@@ -63,7 +63,7 @@ void DatsHandlerInit(wsfHandlerId_t handlerId);
  *  \return None.
  */
 /*************************************************************************************************/
-void DatsHandler(wsfEventMask_t event, wsfMsgHdr_t *pMsg);
+void CtsHandler(wsfEventMask_t event, wsfMsgHdr_t *pMsg);
 
 #ifdef __cplusplus
 };

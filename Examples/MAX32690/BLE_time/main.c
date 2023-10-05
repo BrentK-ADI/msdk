@@ -56,7 +56,7 @@
 #include "pal_bb.h"
 #include "pal_cfg.h"
 
-#include "dats_api.h"
+#include "cts_api.h"
 #include "app_ui.h"
 #include <time.h>
 
@@ -86,7 +86,7 @@ volatile int wutTrimComplete;
 **************************************************************************************************/
 
 /*! \brief  Stack initialization for app. */
-extern void StackInitDats(void);
+extern void StackInitCts(void);
 
 /*************************************************************************************************/
 /*!
@@ -266,8 +266,8 @@ int main(void)
     PalBbDisable();
 #endif
 
-    StackInitDats();
-    DatsStart();
+    StackInitCts();
+    CtsStart();
 
     WsfOsEnterMainLoop();
 
