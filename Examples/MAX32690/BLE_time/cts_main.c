@@ -23,6 +23,7 @@
 /*************************************************************************************************/
 
 #include <string.h>
+#include <time.h>
 #include "wsf_types.h"
 #include "util/bstream.h"
 #include "wsf_msg.h"
@@ -54,8 +55,8 @@
 #include "svc_time.h"
 #include "rtc.h"
 
-#include <time.h>
-#include <stdlib.h>
+
+
 /**************************************************************************************************
   Macros
 **************************************************************************************************/
@@ -264,6 +265,10 @@ typedef enum {
     TIME_RTU_STATE_RESP_W_TIMEOUT,
 } timeUpdateState_t;
 
+enum{
+    TIME_UPDATE_START = 0x1,
+    TIME_UPDATE_CANCEL
+};
 static timeUpdateState_t updateState = TIME_RTU_STATE_IDLE;
 static struct tm* getMxcRtcTime(void)
 {
@@ -285,7 +290,7 @@ static bool_t mxcRtcSetup(struct tm *t)
     }
 
     if (MXC_RTC_SquareWaveStart(MXC_RTC_F_1HZ) == E_BUSY) {
-        APP_TRACE_INFO0("Couldnt start clock of RTC");
+        APP_TRACE_INFO0("Couldnt start to RTC");
         return FALSE;
     }
     if (MXC_RTC_Start() != E_NO_ERROR) {
@@ -293,7 +298,7 @@ static bool_t mxcRtcSetup(struct tm *t)
         return FALSE;
     }
 
-    return FALSE;
+    return TRUE;
 }
 
 static uint8_t ctsReadTime(uint8_t *timedata)
@@ -312,13 +317,34 @@ static uint8_t ctsReadTime(uint8_t *timedata)
     timedata[5] = t->tm_min;
     timedata[6] = t->tm_sec;
 
-    free(t);
 
     return ATT_SUCCESS;
 }
 static timeUpdateState_t ctsGetUpdateTimeState(void)
 {
-    return TIME_RTU_STATE_NO_CONN_TO_REF;
+    return updateState;
+}
+static uint8_t ctsTimeUpdate(uint8_t command)
+{
+    uint8_t ret;
+    updateState = TIME_RTU_STATE_IDLE;
+    
+    switch (command)
+    {
+    case TIME_UPDATE_START:
+        APP_TRACE_INFO0("No Ref to update from");
+        ret = ATT_ERR_NOT_SUP;
+        break;
+    case TIME_UPDATE_CANCEL:
+        APP_TRACE_INFO0("Cancelling ref upate");
+        ret = ATT_ERR_NOT_SUP;
+        break;
+    default:
+        ret = ATT_ERR_INVALID_PDU;
+        break;
+    }
+
+    return ret;
 }
 
 uint8_t timeWriteCb(dmConnId_t connId, uint16_t handle, uint8_t operation, uint16_t offset,
@@ -327,24 +353,9 @@ uint8_t timeWriteCb(dmConnId_t connId, uint16_t handle, uint8_t operation, uint1
     uint8_t ret = ATT_SUCCESS;
     APP_TRACE_INFO1("Write %d", handle);
     switch (handle) {
-    case TIME_RTU_CP_HDL: {
-        uint8_t command = pAttr->pValue[0];        
-        updateState = TIME_RTU_STATE_IDLE;
-
-        if (command == 0x01) {
-            APP_TRACE_INFO0("No Ref to update from");
-            ret = ATT_ERR_NOT_SUP;
-        } else if (command == 0x02) {
-            APP_TRACE_INFO0("Cancelling ref upate");
-            ret = ATT_ERR_NOT_SUP;
-        } else {
-            ret = ATT_ERR_INVALID_PDU;
-        }
+    case TIME_RTU_CP_HDL:         
+        ret = ctsTimeUpdate(pAttr->pValue[0]);
         break;
-    }
-    case TIME_RTU_STATE_CH_HDL: {
-        break;
-    }
 
     default:
         break;
