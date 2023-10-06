@@ -55,7 +55,7 @@
 #include "rtc.h"
 
 #include <time.h>
-
+#include <stdlib.h>
 /**************************************************************************************************
   Macros
 **************************************************************************************************/
@@ -254,30 +254,123 @@ wsfTimer_t trimTimer;
 
 extern void setAdvTxPower(void);
 
-uint8_t timeReadCb(dmConnId_t connId, uint16_t handle, uint8_t operation, uint16_t offset,
-                   attsAttr_t *pAttr)
+typedef enum {
+    TIME_RTU_STATE_IDLE,
+    TIME_RTU_STATE_PENDING,
+    TIME_RTU_STATE_SUCCESS,
+    TIME_RTU_STATE_CANCELED,
+    TIME_RTU_STATE_NO_CONN_TO_REF,
+    TIME_RTU_STATE_RESP_W_ERR,
+    TIME_RTU_STATE_RESP_W_TIMEOUT,
+} timeUpdateState_t;
+
+static timeUpdateState_t updateState = TIME_RTU_STATE_IDLE;
+static struct tm* getMxcRtcTime(void)
 {
     uint32_t now;
     if (MXC_RTC_GetSeconds(&now) != E_NO_ERROR) {
-        return ATT_ERR_READ;
+        return NULL;
+    }
+    const time_t nowCasted = now;
+    return localtime(&nowCasted);
+}
+
+static bool_t mxcRtcSetup(struct tm *t)
+{
+    volatile time_t nowSeconds = mktime(t);
+
+    if (MXC_RTC_Init((uint32_t)nowSeconds, 0) != E_NO_ERROR) {
+        APP_TRACE_INFO0("Failed to initialize RTC");
+        return FALSE;
     }
 
-    struct tm *t = localtime((time_t*)&now);
-    APP_TRACE_INFO3("%d:%d:%d", t->tm_hour, t->tm_min, t->tm_sec);
+    if (MXC_RTC_SquareWaveStart(MXC_RTC_F_1HZ) == E_BUSY) {
+        APP_TRACE_INFO0("Couldnt start clock of RTC");
+        return FALSE;
+    }
+    if (MXC_RTC_Start() != E_NO_ERROR) {
+        APP_TRACE_INFO0("Couldnt start RTC");
+        return FALSE;
+    }
 
-    uint8_t timedata[] = { UINT16_TO_BYTES(t->tm_year + 1900),
-                       t->tm_mon,
-                       t->tm_mday,
-                       t->tm_hour,
-                       t->tm_min,
-                       t->tm_sec,
-                       0,
-                       0,
-                       0 };
+    return FALSE;
+}
 
-    memcpy(pAttr->pValue, timedata, sizeof(timedata));
+static uint8_t ctsReadTime(uint8_t *timedata)
+{
+    struct tm *t = getMxcRtcTime();
+
+    const uint16_t  actual_year = t->tm_year + 1900;
+    
+    APP_TRACE_INFO4("YR: %d, %d:%d:%d",actual_year, t->tm_hour, t->tm_min, t->tm_sec);
+
+    timedata[0] = actual_year & 0xFF;
+    timedata[1] = (actual_year & 0xFF00) >> 8;
+    timedata[2] = t->tm_mon;
+    timedata[3] = t->tm_mday;
+    timedata[4] = t->tm_hour;
+    timedata[5] = t->tm_min;
+    timedata[6] = t->tm_sec;
+
+    free(t);
 
     return ATT_SUCCESS;
+}
+static timeUpdateState_t ctsGetUpdateTimeState(void)
+{
+    return TIME_RTU_STATE_NO_CONN_TO_REF;
+}
+
+uint8_t timeWriteCb(dmConnId_t connId, uint16_t handle, uint8_t operation, uint16_t offset,
+                    uint16_t len, uint8_t *pValue, attsAttr_t *pAttr)
+{
+    uint8_t ret = ATT_SUCCESS;
+    APP_TRACE_INFO1("Write %d", handle);
+    switch (handle) {
+    case TIME_RTU_CP_HDL: {
+        uint8_t command = pAttr->pValue[0];        
+        updateState = TIME_RTU_STATE_IDLE;
+
+        if (command == 0x01) {
+            APP_TRACE_INFO0("No Ref to update from");
+            ret = ATT_ERR_NOT_SUP;
+        } else if (command == 0x02) {
+            APP_TRACE_INFO0("Cancelling ref upate");
+            ret = ATT_ERR_NOT_SUP;
+        } else {
+            ret = ATT_ERR_INVALID_PDU;
+        }
+        break;
+    }
+    case TIME_RTU_STATE_CH_HDL: {
+        break;
+    }
+
+    default:
+        break;
+    }
+
+    return ret;
+}
+uint8_t timeReadCb(dmConnId_t connId, uint16_t handle, uint8_t operation, uint16_t offset,
+                   attsAttr_t *pAttr)
+{
+    APP_TRACE_INFO1("Read %d", handle);
+
+    uint8_t ret = ATT_SUCCESS;
+
+    switch (handle) {
+    case TIME_CTS_CT_HDL:
+        ret = ctsReadTime(pAttr->pValue);
+        break;
+    case TIME_RTU_STATE_HDL:
+        pAttr->pValue[1] = ctsGetUpdateTimeState();
+        break;
+    default:
+        break;
+    }
+
+    return ret;
 }
 /*************************************************************************************************/
 /*!
@@ -384,7 +477,6 @@ static void ctsDmCback(dmEvt_t *pDmEvt)
 static void ctsAttCback(attEvt_t *pEvt)
 {
     attEvt_t *pMsg;
-    
 
     if ((pMsg = WsfMsgAlloc(sizeof(attEvt_t) + pEvt->valueLen)) != NULL) {
         memcpy(pMsg, pEvt, sizeof(attEvt_t));
@@ -406,7 +498,6 @@ static void ctsAttCback(attEvt_t *pEvt)
 static void ctsCccCback(attsCccEvt_t *pEvt)
 {
     appDbHdl_t dbHdl;
-    
 
     /* If CCC not set from initialization and there's a device record and currently bonded */
     if ((pEvt->handle != ATT_HANDLE_NONE) &&
@@ -449,7 +540,7 @@ static void trimStart(void)
  */
 /*************************************************************************************************/
 uint8_t ctsWpWriteCback(dmConnId_t connId, uint16_t handle, uint8_t operation, uint16_t offset,
-                         uint16_t len, uint8_t *pValue, attsAttr_t *pAttr)
+                        uint16_t len, uint8_t *pValue, attsAttr_t *pAttr)
 {
     static uint32_t packetCount = 0;
 
@@ -567,8 +658,7 @@ static void ctsSetup(dmEvt_t *pMsg)
 
     /* set advertising and scan response data for discoverable mode */
     AppAdvSetData(APP_ADV_DATA_DISCOVERABLE, sizeof(ctsAdvDataDisc), (uint8_t *)ctsAdvDataDisc);
-    AppAdvSetData(APP_SCAN_DATA_DISCOVERABLE, sizeof(ctsScanDataDisc),
-                  (uint8_t *)ctsScanDataDisc);
+    AppAdvSetData(APP_SCAN_DATA_DISCOVERABLE, sizeof(ctsScanDataDisc), (uint8_t *)ctsScanDataDisc);
 
     /* set advertising and scan response data for connectable mode */
     AppAdvSetData(APP_ADV_DATA_CONNECTABLE, sizeof(ctsAdvDataDisc), (uint8_t *)ctsAdvDataDisc);
@@ -782,7 +872,7 @@ static void ctsProcMsg(dmEvt_t *pMsg)
 void CtsHandlerInit(wsfHandlerId_t handlerId)
 {
     uint8_t addr[6] = { 0 };
-    
+
     AppGetBdAddr(addr);
     APP_TRACE_INFO6("MAC Addr: %02x:%02x:%02x:%02x:%02x:%02x", addr[5], addr[4], addr[3], addr[2],
                     addr[1], addr[0]);
@@ -1008,24 +1098,6 @@ void CtsHandler(wsfEventMask_t event, wsfMsgHdr_t *pMsg)
     }
 }
 
-static void mxcRtcSetup(void)
-{
-    struct tm t = { .tm_hour = 12, .tm_mon = 10, .tm_year = 2023 - 1900 };
-
-    time_t nowSeconds = mktime(&t);
-
-    if (MXC_RTC_Init((uint32_t)nowSeconds, 0) != E_NO_ERROR) {
-        APP_TRACE_INFO0("Failed to initialize RTC");
-    }
-
-    if (MXC_RTC_SquareWaveStart(MXC_RTC_F_1HZ) == E_BUSY) {
-        APP_TRACE_INFO0("Couldnt start clock of RTC");
-    }
-    if (MXC_RTC_Start() != E_NO_ERROR) {
-        APP_TRACE_INFO0("Couldnt start RTC");
-    }
-
-}
 /*************************************************************************************************/
 /*!
  *  \brief  Start the application.
@@ -1035,7 +1107,8 @@ static void mxcRtcSetup(void)
 /*************************************************************************************************/
 void CtsStart(void)
 {
-    mxcRtcSetup();
+    struct tm t = { .tm_hour = 12, .tm_mon = 10, .tm_year = 2023 - 1900 };
+    mxcRtcSetup(&t);
 
     /* Register for stack callbacks */
     DmRegister(ctsDmCback);
@@ -1048,7 +1121,7 @@ void CtsStart(void)
     SvcCoreGattCbackRegister(GattReadCback, GattWriteCback);
     SvcCoreAddGroup();
 
-    SvcTimeRegisterCback(timeReadCb, NULL);
+    SvcTimeRegisterCback(timeReadCb, timeWriteCb);
     SvcTimeAddGroup();
 
     /* Register for app framework button callbacks */

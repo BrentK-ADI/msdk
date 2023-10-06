@@ -102,6 +102,13 @@ void SvcTimeAddGroup(void);
 /*************************************************************************************************/
 void SvcTimeRemoveGroup(void);
 
+/*************************************************************************************************/
+/*!
+ *  \brief  Bind callbacks for use with service
+ *
+ *  \return None.
+ */
+/*************************************************************************************************/
 void SvcTimeRegisterCback(attsReadCback_t readCback, attsWriteCback_t writeCback);
 
 /*! \} */    /* TIME-RELATED_SERVICE */

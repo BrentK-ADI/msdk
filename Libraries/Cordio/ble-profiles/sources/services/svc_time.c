@@ -244,7 +244,7 @@ static const attsAttr_t timeList[] =
     timeRtuValCp,
     (uint16_t *) &timeRtuLenCp,
     sizeof(timeRtuValCp),
-    0,
+    ATTS_SET_WRITE_CBACK,
     TIME_SEC_PERMIT_WRITE
   },
   {
@@ -260,7 +260,7 @@ static const attsAttr_t timeList[] =
     timeRtuValState,
     (uint16_t *) &timeRtuLenState,
     sizeof(timeRtuValState),
-    0,
+    ATTS_SET_READ_CBACK,
     TIME_SEC_PERMIT_READ
   }
 };
