@@ -142,7 +142,7 @@ endif
 LIB_LWIP ?= 0
 ifeq ($(LIB_LWIP), 1)
 LWIP_DIR ?= $(LIBS_DIR)/lwIP
-include $(LWIP_DIR)/lwip.mk
+include $(LWIP_DIR)/lwip.mk 
 endif
 # ************************
 
@@ -154,6 +154,18 @@ MAXUSB_DIR ?= $(LIBS_DIR)/MAXUSB
 include $(MAXUSB_DIR)/maxusb.mk
 endif
 # ************************
+
+
+# MAXUSB (Disabled by default)
+# ************************
+LIB_TUSB ?= 1
+ifeq ($(LIB_MAXUSB), 1)
+TUSB_DIR ?= $(LIBS_DIR)/tinyusb
+include $(TUSB_DIR)/tinyusb.mk
+endif
+# ************************
+
+
 
 # SDHC (Disabled by default)
 # ************************

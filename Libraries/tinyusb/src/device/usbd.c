@@ -26,6 +26,7 @@
 
 #include "tusb_option.h"
 
+
 #if CFG_TUD_ENABLED
 
 #include "device/dcd.h"
@@ -441,6 +442,7 @@ static void configuration_reset(uint8_t rhport)
 
 static void usbd_reset(uint8_t rhport)
 {
+  
   configuration_reset(rhport);
   usbd_control_reset();
 }
