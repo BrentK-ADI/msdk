@@ -88,6 +88,7 @@ SRCS += ${LIB_TUSB_DIR}/src/portable/${TARGET_UC}/dcd_${TARGET_LC}.c
 SRCS += ${LIB_TUSB_DIR}/src/device/usbd.c
 SRCS += ${TINYUSB_SRC_C}
 SRCS += ${LIB_TUSB_DIR}hw/bsp/board.c
+SRCS += ${LIB_TUSB_DIR}hw/bsp/board_${TARGET_LC}.c
 
 
 PROJ_CFLAGS += -I${LIB_TUSB_DIR}/src
