@@ -158,8 +158,8 @@ endif
 
 # MAXUSB (Disabled by default)
 # ************************
-LIB_TUSB ?= 1
-ifeq ($(LIB_MAXUSB), 1)
+LIB_TUSB ?= 0
+ifeq ($(LIB_TUSB), 1)
 TUSB_DIR ?= $(LIBS_DIR)/tinyusb
 include $(TUSB_DIR)/tinyusb.mk
 endif
