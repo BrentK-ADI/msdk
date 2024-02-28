@@ -65,8 +65,7 @@ int main(void)
   while (1)
   {
     tud_task(); // tinyusb device task
-    
-
+  
     cdc_task();
   }
 }
@@ -151,4 +150,3 @@ void tud_cdc_rx_cb(uint8_t itf)
 {
   (void) itf;
 }
-

@@ -14,3 +14,4 @@ SBT=0
 
 # Enable MAXUSB library
 LIB_MAXUSB = 1
+LIB_TUSB = 0
