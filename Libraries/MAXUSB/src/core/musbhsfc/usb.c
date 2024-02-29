@@ -37,8 +37,12 @@ typedef enum {
     SETUP_DATA_IN
 } setup_phase_t;
 
+
+
+
 /* storage for active endpoint data request objects */
 static MXC_USB_Req_t *MXC_USB_Request[MXC_USBHS_NUM_EP];
+
 /* endpoint sizes */
 static unsigned int ep_size[MXC_USBHS_NUM_EP];
 /* MUSBHSFC does not track SETUP in hardware, so instantiate state variable */
