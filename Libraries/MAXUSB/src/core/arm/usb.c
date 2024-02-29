@@ -515,25 +515,24 @@ int MXC_USB_WriteEndpoint(MXC_USB_Req_t *req)
     uint32_t buffer_bit = (1 << ep);
 
     if (ep >= MXC_USB_NUM_EP) {
-        puts("EP TOO BIG");
+        
         return -1;
     }
 
     /* data buffer must be 32-bit aligned */
     if ((unsigned int)data & 0x3) {
-        puts("Not aligned");
+        
         return -1;
     }
 
     /* EP must be enabled (configured) */
     if (((MXC_USB->ep[ep] & MXC_F_USB_EP_DIR) >> MXC_F_USB_EP_DIR_POS) == MXC_V_USB_EP_DIR_DISABLE) {
-        puts("EP NOT ENABLED");
+        
         return -1;
     }
 
     /* if pending request; error */
     if (usb_request[ep] || (MXC_USB->in_owner & buffer_bit)) {
-        puts("Req pending");
         return -1;
     }
 

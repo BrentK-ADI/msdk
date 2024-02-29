@@ -24,6 +24,11 @@
 static void write_callback(void *cbdata);
 static void read_callback(void *cbdata);
 
+static volatile MXC_USB_Req_t writereq = { .callback = write_callback };
+static volatile MXC_USB_Req_t readreq = { .callback = read_callback };
+static volatile bool write_done = false;
+static volatile bool read_done = false;
+
 void delay_us(unsigned int usec)
 {
     /* mxc_delay() takes unsigned long, so can't use it directly */
@@ -47,23 +52,12 @@ int usbShutdownCallback()
 
     return E_NO_ERROR;
 }
-void dcd_edpt0_status_complete(uint8_t rhport, tusb_control_request_t const * request)
-{
-    (void) rhport;
-
-    if (request->bmRequestType_bit.recipient == TUSB_REQ_RCPT_DEVICE &&
-        request->bmRequestType_bit.type == TUSB_REQ_TYPE_STANDARD &&
-        request->bRequest == TUSB_REQ_SET_ADDRESS )
-    {
-        const uint8_t dev_addr = (uint8_t) request->wValue;
-    }
-}
 
 static int event_callback(maxusb_event_t evt, void *data)
-{   
+{
     (void)data;
     int err = E_NO_ERROR;
-    
+
     switch (evt) {
     case MAXUSB_EVENT_BRST:
         puts("Bus Reset");
@@ -78,26 +72,16 @@ static int event_callback(maxusb_event_t evt, void *data)
         MXC_USB_SetupPkt sud;
         if (MXC_USB_GetSetup(&sud) != E_NO_ERROR) {
             err = E_FAIL;
-            puts("ERROR!");
             break;
         }
         puts("Setup Data Available");
+
         uint8_t setup[sizeof(MXC_USB_SetupPkt)];
-
-#if 0
         memcpy(setup, &sud, sizeof(setup));
-#else
 
-        setup[0] = sud.bmRequestType;
-        setup[1] = sud.bRequest;
-        setup[2] = BYTE_LOW(sud.wValue);
-        setup[3] = BYTE_HIGH(sud.wValue);
-        setup[4] = BYTE_LOW(sud.wIndex);
-        setup[5] = BYTE_HIGH(sud.wIndex);
-        setup[6] = BYTE_LOW(sud.wLength);
-        setup[7] = BYTE_HIGH(sud.wLength);
-#endif
+        dcd_event_xfer_complete(0, readreq.ep, readreq.actlen, XFER_RESULT_SUCCESS, true);
         dcd_event_setup_received(0, setup, true);
+
         break;
     }
     case MAXUSB_EVENT_BRSTDN:
@@ -112,12 +96,14 @@ static int event_callback(maxusb_event_t evt, void *data)
         printf("OTHER EVENT");
         break;
     }
-  
+
+    MXC_ASSERT(MXC_USB_EventClear(evt) == E_NO_ERROR);
+
     return err;
 }
 void dcd_init(uint8_t rhport)
 {
-    printf("Initializing USB\n");
+    puts("Initializing USB\n");
     const maxusb_cfg_options_t usb_opts = {
         .enable_hs = 0,
         .delay_us = delay_us,
@@ -126,6 +112,7 @@ void dcd_init(uint8_t rhport)
     };
 
     MXC_ASSERT(MXC_USB_Init((maxusb_cfg_options_t *)&usb_opts) == E_NO_ERROR);
+
     MXC_ASSERT(MXC_USB_EventClear(MAXUSB_EVENT_BRST) == E_NO_ERROR);
     MXC_ASSERT(MXC_USB_EventEnable(MAXUSB_EVENT_BRST, event_callback, NULL) == E_NO_ERROR);
     MXC_ASSERT(MXC_USB_EventClear(MAXUSB_EVENT_DPACT) == E_NO_ERROR);
@@ -134,7 +121,7 @@ void dcd_init(uint8_t rhport)
     MXC_ASSERT(MXC_USB_EventEnable(MAXUSB_EVENT_SUSP, event_callback, NULL) == E_NO_ERROR);
     MXC_ASSERT(MXC_USB_EventClear(MAXUSB_EVENT_SUDAV) == E_NO_ERROR);
     MXC_ASSERT(MXC_USB_EventEnable(MAXUSB_EVENT_SUDAV, event_callback, NULL) == E_NO_ERROR);
-    // MXC_ASSERT(enum_init() == E_NO_ERROR);
+
     MXC_ASSERT(MXC_USB_Connect() == E_NO_ERROR);
 }
 void dcd_int_enable(uint8_t rhport)
@@ -162,13 +149,21 @@ void dcd_edpt_clear_stall(uint8_t rhport, uint8_t ep_addr)
     MXC_USB_Unstall(epnum);
 }
 
-
 void dcd_set_address(uint8_t rhport, uint8_t dev_addr)
 {
+    (void)rhport;
+    printf("DCD - SET ADDR %u\n", dev_addr);
+
+    static const uint8_t ep_addr = 0x80;
 
     MXC_ASSERT(MXC_USB_SetFuncAddr(dev_addr) == E_NO_ERROR);
-    dcd_edpt_xfer(rhport, 0x80, NULL, 0);
- 
+    MXC_USBHS->csr0 |= MXC_F_USBHS_CSR0_SERV_OUTPKTRDY;
+    while (MXC_USBHS->incsrl & MXC_F_USBHS_INCSRL_INPKTRDY)
+        ;
+
+    dcd_edpt_xfer(rhport, ep_addr, NULL, 0);
+    while (!write_done)
+        ;
 }
 
 void dcd_remote_wakeup(uint8_t rhport)
@@ -197,53 +192,53 @@ bool dcd_edpt_open(uint8_t rhport, tusb_desc_endpoint_t const *desc_ep)
 {
     return TRUE;
 }
-static volatile MXC_USB_Req_t writereq = { .callback = write_callback };
-static volatile MXC_USB_Req_t readreq = { .callback = read_callback };
-
-
-
 
 static void write_callback(void *cbdata)
 {
-    puts("WRITE DONE");
     (void)cbdata;
+    MXC_ASSERT(!(MXC_USBHS->incsrl & MXC_F_USBHS_INCSRL_INPKTRDY));
+    write_done = true;
+    puts("WRITE DONE");
     dcd_event_xfer_complete(0, writereq.ep | TUSB_DIR_IN_MASK, writereq.actlen, XFER_RESULT_SUCCESS,
                             true);
 }
 
 static void read_callback(void *cbdata)
 {
-    puts("READ DONE");
     (void)cbdata;
+
+    read_done = true;
+    puts("READ DONE");
     dcd_event_xfer_complete(0, readreq.ep, readreq.actlen, XFER_RESULT_SUCCESS, true);
 }
 
 bool dcd_edpt_xfer(uint8_t rhport, uint8_t ep_addr, uint8_t *buffer, uint16_t total_bytes)
 {
-    const uint8_t epnum = tu_edpt_number(ep_addr);
     const uint8_t dir = tu_edpt_dir(ep_addr);
-    
-    printf("XFER %d\n", dir);
+    const uint8_t epnum = tu_edpt_number(ep_addr);
+
+    printf("XFER %s\n", dir == TUSB_DIR_IN ? "IN" : "OUT");
+
     int32_t err;
     if (dir == TUSB_DIR_IN) {
+        write_done = false;
         writereq.data = buffer;
         writereq.reqlen = total_bytes;
         writereq.ep = epnum;
 
         err = MXC_USB_WriteEndpoint((MXC_USB_Req_t *)&writereq);
     } else {
+        read_done = false;
         readreq.data = buffer;
         readreq.ep = epnum;
         readreq.reqlen = total_bytes;
-        
+
         err = MXC_USB_ReadEndpoint((MXC_USB_Req_t *)&readreq);
     }
 
-    if(err != E_NO_ERROR)
-    {
+    if (err != E_NO_ERROR) {
         printf("Error %d\n", err);
     }
-
 
     return err == E_NO_ERROR;
 }
@@ -251,6 +246,5 @@ void dcd_edpt_close_all(uint8_t rhport) {}
 
 void dcd_int_handler(uint8_t rhport)
 {
-    // MXC_USB_EventHandler();
-
+    MXC_USB_EventHandler();
 }
