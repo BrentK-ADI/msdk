@@ -29,6 +29,7 @@
 #include "wsf_types.h"
 #include "util/bstream.h"
 #include "wsf_msg.h"
+#include "wsf_buf.h"
 #include "wsf_trace.h"
 #include "wsf_assert.h"
 #include "hci_api.h"
@@ -48,6 +49,9 @@
 #include "paspc/paspc_api.h"
 #include "hrpc/hrpc_api.h"
 #include "dis/dis_api.h"
+
+/* Down sample the number of scan reports we print */
+#define SCAN_REPORT_DOWN_SAMPLE 20
 
 /**************************************************************************************************
   Local Variables
@@ -152,14 +156,19 @@ static const appCfg_t watchAppCfg =
   TRUE                                    /*! TRUE to disconnect if ATT transaction times out */
 };
 
+#if DM_NUM_PHYS != 3
+#error "DM_NUM_PHYS should be 3 for multiple PHY usage in Libraries/Cordio/ble-host/sources/stack/cfg/cfg_stack.h"
+#endif
+
 /*! configurable parameters for master */
-static const appMasterCfg_t watchMasterCfg =
+static const appExtMasterCfg_t watchExtMasterCfg =
 {
-  96,                                      /*! The scan interval, in 0.625 ms units */
-  48,                                      /*! The scan window, in 0.625 ms units  */
-  1000,                                    /*! The scan duration in ms */
-  DM_DISC_MODE_NONE,                       /*! The GAP discovery mode */
-  DM_SCAN_TYPE_ACTIVE                      /*! The scan type (active or passive) */
+  .scanInterval = { 96, 0, 96 },
+  .scanWindow = { 48, 0, 48 },
+  .scanDuration = 1000,
+  .scanPeriod = 0,
+  .discMode = DM_DISC_MODE_NONE,
+  .scanType = { DM_SCAN_TYPE_ACTIVE, DM_SCAN_TYPE_ACTIVE, DM_SCAN_TYPE_ACTIVE }
 };
 
 /**************************************************************************************************
@@ -574,6 +583,77 @@ static void watchScanStop(dmEvt_t *pMsg)
   }
 }
 
+
+/*************************************************************************************************/
+/*!
+ *  \brief  Print the name value from a scan report.
+ *
+ *  \param  name    Pointer to name parameter from a scan report.
+ *
+ *  \return None.
+ */
+/*************************************************************************************************/
+static void watchPrintName(uint8_t *name)
+{
+    /* Allocate a buffer for the device name */
+    uint8_t *printBuf;
+    printBuf = WsfBufAlloc(name[DM_AD_LEN_IDX]);
+
+    if (printBuf != NULL) {
+        /* Copy in the data and null terminate the string */
+        memcpy(printBuf, &name[DM_AD_DATA_IDX], name[DM_AD_LEN_IDX] - 1);
+        printBuf[name[DM_AD_LEN_IDX] - 1] = 0;
+
+        APP_TRACE_INFO1("  Name: %s", printBuf);
+        WsfBufFree(printBuf);
+    }
+}
+
+/*************************************************************************************************/
+/*!
+ *  \brief  Print the contents of a scan report.
+ *
+ *  \param  pMsg    Pointer to DM callback event message.
+ *
+ *  \return None.
+ */
+/*************************************************************************************************/
+static void watchPrintScanReport(dmEvt_t *pMsg)
+{
+#if WSF_TRACE_ENABLED == TRUE
+    const char* phyStr;
+    uint8_t *pData;
+
+    switch(pMsg->extScanReport.priPhy){
+      case HCI_ADV_PHY_LE_1M:
+        phyStr = "1M";
+        break;
+      case HCI_ADV_PHY_LE_2M:
+        phyStr = "2M";
+        break;
+      case HCI_ADV_PHY_LE_CODED:
+        phyStr = "CODED";
+        break;
+      default:
+        phyStr = "UNK";
+        break;
+    }
+
+    APP_TRACE_INFO0("Scan Report:");
+    WsfTrace("  %02x:%02x:%02x:%02x:%02x:%02x, PHY: %s RSSI: %d", pMsg->extScanReport.addr[5], pMsg->extScanReport.addr[4],
+             pMsg->extScanReport.addr[3], pMsg->extScanReport.addr[2], pMsg->extScanReport.addr[1],
+             pMsg->extScanReport.addr[0], phyStr, pMsg->extScanReport.rssi);
+
+    if ((pData = DmFindAdType(DM_ADV_TYPE_LOCAL_NAME, pMsg->extScanReport.len,
+                              pMsg->extScanReport.pData)) != NULL) {
+        watchPrintName(pData);
+    } else if ((pData = DmFindAdType(DM_ADV_TYPE_SHORT_NAME, pMsg->extScanReport.len,
+                                     pMsg->extScanReport.pData)) != NULL) {
+        watchPrintName(pData);
+    }
+#endif
+}
+
 /*************************************************************************************************/
 /*!
  *  \brief  Handle a scan report.
@@ -596,10 +676,10 @@ static void watchScanReport(dmEvt_t *pMsg)
   }
 
   /* if we already have a bond with this device then connect to it */
-  if ((dbHdl = AppDbFindByAddr(pMsg->scanReport.addrType, pMsg->scanReport.addr)) != APP_DB_HDL_NONE)
+  if ((dbHdl = AppDbFindByAddr(pMsg->extScanReport.addrType, pMsg->extScanReport.addr)) != APP_DB_HDL_NONE)
   {
     /* if this is a directed advertisement where the initiator address is an RPA */
-    if (DM_RAND_ADDR_RPA(pMsg->scanReport.directAddr, pMsg->scanReport.directAddrType))
+    if (DM_RAND_ADDR_RPA(pMsg->extScanReport.directAddr, pMsg->extScanReport.directAddrType))
     {
       /* resolve direct address to see if it's addressed to us */
       AppMasterResolveAddr(pMsg, dbHdl, APP_RESOLVE_DIRECT_RPA);
@@ -610,7 +690,7 @@ static void watchScanReport(dmEvt_t *pMsg)
     }
   }
   /* if the peer device uses an RPA */
-  else if (DM_RAND_ADDR_RPA(pMsg->scanReport.addr, pMsg->scanReport.addrType))
+  else if (DM_RAND_ADDR_RPA(pMsg->extScanReport.addr, pMsg->extScanReport.addrType))
   {
     /* resolve advertiser's RPA to see if we already have a bond with this device */
     AppMasterResolveAddr(pMsg, APP_DB_HDL_NONE, APP_RESOLVE_ADV_RPA);
@@ -618,11 +698,11 @@ static void watchScanReport(dmEvt_t *pMsg)
   else
   {
     /* find Service UUID list; if full list not found search for partial */
-    if ((pData = DmFindAdType(DM_ADV_TYPE_16_UUID, pMsg->scanReport.len,
-                              pMsg->scanReport.pData)) == NULL)
+    if ((pData = DmFindAdType(DM_ADV_TYPE_16_UUID, pMsg->extScanReport.len,
+                              pMsg->extScanReport.pData)) == NULL)
     {
-      pData = DmFindAdType(DM_ADV_TYPE_16_UUID_PART, pMsg->scanReport.len,
-                           pMsg->scanReport.pData);
+      pData = DmFindAdType(DM_ADV_TYPE_16_UUID_PART, pMsg->extScanReport.len,
+                           pMsg->extScanReport.pData);
     }
 
     /* if found and length checks out ok */
@@ -648,15 +728,27 @@ static void watchScanReport(dmEvt_t *pMsg)
 
   if (connect)
   {
+    watchPrintScanReport(pMsg);
+
     /* stop scanning and connect */
     watchCb.autoConnect = FALSE;
-    AppScanStop();
+    AppExtScanStop();
 
     /* Store peer information for connect on scan stop */
-    watchConnInfo.addrType = DmHostAddrType(pMsg->scanReport.addrType);
-    memcpy(watchConnInfo.addr, pMsg->scanReport.addr, sizeof(bdAddr_t));
+    watchConnInfo.addrType = DmHostAddrType(pMsg->extScanReport.addrType);
+    memcpy(watchConnInfo.addr, pMsg->extScanReport.addr, sizeof(bdAddr_t));
     watchConnInfo.dbHdl = dbHdl;
     watchConnInfo.doConnect = TRUE;
+  }
+  else
+  {
+      static int scanReportDownSample = 0;
+
+      /* Down sample the number of scan reports we print */
+      if (scanReportDownSample++ == SCAN_REPORT_DOWN_SAMPLE) {
+          scanReportDownSample = 0;
+          watchPrintScanReport(pMsg);
+      }
   }
 }
 
@@ -734,7 +826,7 @@ static void watchSetup(dmEvt_t *pMsg)
   AppAdvSetData(APP_SCAN_DATA_CONNECTABLE, 0, NULL);
 
   /* start advertising; automatically set connectable/discoverable mode and bondable mode */
-  AppAdvStart(APP_MODE_AUTO_INIT);
+  //AppAdvStart(APP_MODE_AUTO_INIT);
 
   DmConnSetConnSpec((hciConnSpec_t *) &watchConnCfg);
 }
@@ -875,15 +967,15 @@ static void watchBtnCback(uint8_t btn)
         /* if scanning cancel scanning */
         if (watchCb.scanning)
         {
-          AppScanStop();
+          AppExtScanStop();
         }
         /* else auto connect */
         else if (!watchCb.autoConnect)
         {
           watchCb.autoConnect = TRUE;
           watchConnInfo.doConnect = FALSE;
-          AppScanStart(watchMasterCfg.discMode, watchMasterCfg.scanType,
-                        watchMasterCfg.scanDuration);
+
+          AppExtScanStart(HCI_SCAN_PHY_LE_CODED_BIT | HCI_SCAN_PHY_LE_1M_BIT, watchExtMasterCfg.discMode, watchExtMasterCfg.scanType, watchExtMasterCfg.scanDuration, watchExtMasterCfg.scanPeriod);
         }
         return;
 
@@ -1163,17 +1255,25 @@ static void watchProcMsg(dmEvt_t *pMsg)
       uiEvent = APP_UI_ADV_STOP;
       break;
 
-    case DM_SCAN_START_IND:
+    case DM_ADV_SET_START_IND:
+      uiEvent = APP_UI_ADV_SET_START_IND;
+      break;
+
+    case DM_ADV_SET_STOP_IND:
+      uiEvent = APP_UI_ADV_SET_STOP_IND;
+      break;
+
+    case DM_EXT_SCAN_START_IND:
       watchScanStart(pMsg);
       uiEvent = APP_UI_SCAN_START;
       break;
 
-    case DM_SCAN_STOP_IND:
+    case DM_EXT_SCAN_STOP_IND:
       watchScanStop(pMsg);
       uiEvent = APP_UI_SCAN_STOP;
       break;
 
-    case DM_SCAN_REPORT_IND:
+    case DM_EXT_SCAN_REPORT_IND:
       watchScanReport(pMsg);
       break;
 
@@ -1240,7 +1340,7 @@ void WatchHandlerInit(wsfHandlerId_t handlerId)
   watchCb.handlerId = handlerId;
 
   /* Set configuration pointers */
-  pAppMasterCfg = (appMasterCfg_t *) &watchMasterCfg;
+  pAppExtMasterCfg = (appExtMasterCfg_t *) &watchExtMasterCfg;
   pAppSlaveCfg = (appSlaveCfg_t *) &watchSlaveCfg;
   pAppAdvCfg = (appAdvCfg_t *) &watchAdvCfg;
   pAppSecCfg = (appSecCfg_t *) &watchSecCfg;
@@ -1271,7 +1371,7 @@ void WatchHandler(wsfEventMask_t event, wsfMsgHdr_t *pMsg)
 {
   if (pMsg != NULL)
   {
-    APP_TRACE_INFO1("Watch got evt %d", pMsg->event);
+    //APP_TRACE_INFO1("Watch got evt %d", pMsg->event);
 
     /* process ATT messages */
     if (pMsg->event <= ATT_CBACK_END)

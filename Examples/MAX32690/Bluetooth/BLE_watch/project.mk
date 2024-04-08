@@ -13,6 +13,7 @@
 SBT=0
 
 # Enable Cordio library
+DEBUG=1
 LIB_CORDIO = 1
 
 # Cordio library options

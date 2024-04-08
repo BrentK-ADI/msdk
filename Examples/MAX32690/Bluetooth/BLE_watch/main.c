@@ -62,6 +62,9 @@
 #include "watch_api.h"
 #include "app_ui.h"
 
+#include "fcr_regs.h"
+#include "mxc_delay.h"
+
 /**************************************************************************************************
   Macros
 **************************************************************************************************/
@@ -179,6 +182,30 @@ void setAdvTxPower(void)
     LlSetAdvTxPower(DEFAULT_TX_POWER);
 }
 
+static void calibrateIPOClock(void)
+{
+    // 4.1.1.1 IPO Calibration
+    // 1. Enable the ERTCO by setting GCR_CLKCTRL.ertco_en to 1.
+    // 2. Wait until GCR_CLKCTRL.ertco_rdy reads 1. The ERTCO is now operating.
+    MXC_SYS_ClockSourceEnable(MXC_SYS_CLOCK_ERTCO);
+
+    // 3. Set the FCR_AUTOCAL2.acdiv field to 3,662. See the FCR_AUTOCAL2.acdiv field for additional information.
+    MXC_FCR->autocal2 &= ~MXC_F_FCR_AUTOCAL2_ACDIV;
+    MXC_FCR->autocal2 |= (3662 << MXC_F_FCR_AUTOCAL2_ACDIV_POS);
+
+    // 4. Set the FCR_AUTOCAL1.inittrm field to 0x40.
+    MXC_FCR->autocal1 &= ~MXC_F_FCR_AUTOCAL1_INITTRM;
+    MXC_FCR->autocal1 |= (0x40 << MXC_F_FCR_AUTOCAL1_INITTRM_POS);
+
+    // 5. Set the FCR_AUTOCAL0.acrun, FCR_AUTOCAL0.acen, and FCR_AUTOCAL0.ldtrm fields to 1 by performing a bitwise OR of the FCR_AUTOCAL0 register with 0x7
+    MXC_FCR->autocal0 |= (MXC_F_FCR_AUTOCAL0_ACEN | MXC_F_FCR_AUTOCAL0_ACRUN | MXC_F_FCR_AUTOCAL0_LDTRM);
+
+    // 6. Wait 10ms for the trim to complete.
+    MXC_Delay(MXC_DELAY_MSEC(10));
+
+    // 7. Set the FCR_AUTOCAL0.acrun field to 0 to stop the calibration.
+    MXC_FCR->autocal0 &= ~MXC_F_FCR_AUTOCAL0_ACRUN;
+}
 /*************************************************************************************************/
 /*!
 *  \fn     main
@@ -192,6 +219,8 @@ void setAdvTxPower(void)
 /*************************************************************************************************/
 int main(void)
 {
+    calibrateIPOClock();
+
 #if defined(HCI_TR_EXACTLE) && (HCI_TR_EXACTLE == 1)
     /* Configurations must be persistent. */
     static BbRtCfg_t mainBbRtCfg;

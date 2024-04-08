@@ -65,10 +65,11 @@ void StackInitWatch(void)
   handlerId = WsfOsSetNextHandler(DmHandler);
   DmDevVsInit(0);
   DmConnInit();
-  DmAdvInit();
-  DmConnMasterInit();
-  DmConnSlaveInit();
-  DmScanInit();
+  DmExtAdvInit();
+  DmExtConnMasterInit();
+  DmExtConnSlaveInit();
+  DmExtScanInit();
+
   DmSecInit();
   DmSecLescInit();
   DmPrivInit();
