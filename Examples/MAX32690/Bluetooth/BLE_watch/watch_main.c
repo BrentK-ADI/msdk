@@ -496,9 +496,9 @@ static void watchDmCback(dmEvt_t *pDmEvt)
 
   len = DmSizeOfEvt(pDmEvt);
 
-  if (pDmEvt->hdr.event == DM_SCAN_REPORT_IND)
+  if (pDmEvt->hdr.event == DM_EXT_SCAN_REPORT_IND)
   {
-    reportLen = pDmEvt->scanReport.len;
+    reportLen = pDmEvt->extScanReport.len;
   }
   else
   {
@@ -509,10 +509,10 @@ static void watchDmCback(dmEvt_t *pDmEvt)
   {
     memcpy(pMsg, pDmEvt, len);
 
-    if (pDmEvt->hdr.event == DM_SCAN_REPORT_IND)
+    if (pDmEvt->hdr.event == DM_EXT_SCAN_REPORT_IND)
     {
-      pMsg->scanReport.pData = (uint8_t *) ((uint8_t *) pMsg + len);
-      memcpy(pMsg->scanReport.pData, pDmEvt->scanReport.pData, reportLen);
+      pMsg->extScanReport.pData = (uint8_t *) ((uint8_t *) pMsg + len);
+      memcpy(pMsg->extScanReport.pData, pDmEvt->extScanReport.pData, reportLen);
     }
 
     WsfMsgSend(watchCb.handlerId, pMsg);
