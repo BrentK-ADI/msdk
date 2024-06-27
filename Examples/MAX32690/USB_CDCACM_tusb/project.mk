@@ -1,5 +1,5 @@
 # This file can be used to set build configuration
-# variables.  These variables are defined in a file called 
+# variables.  These variables are defined in a file called
 # "Makefile" that is located next to this one.
 
 # For instructions on how to use this system, see
@@ -16,7 +16,8 @@ SBT=0
 LIB_MAXUSB = 1
 LIB_TUSB = 1
 
-PROJ_CFLAGS += -DCFG_TUSB_MCU=MAX32690
+PROJ_CFLAGS += -DCFG_TUSB_MCU=OPT_MCU_MAX32690
+PROJ_CFLAGS += -DBOARD_TUD_MAX_SPEED=OPT_MODE_HIGH_SPEED
 PROJ_CFLAGS += -DCFG_TUD_ENABLED=1
-PROJ_CFLAGS += -DTUP_DCD_ENDPOINT_MAX=15
-PROJ_CFLAGS += -DCFG_TUSB_OS
+PROJ_CFLAGS += -DCFG_TUSB_DEBUG=3
+PROJ_CFLAGS += -DCFG_TUSB_OS=OPT_OS_NONE

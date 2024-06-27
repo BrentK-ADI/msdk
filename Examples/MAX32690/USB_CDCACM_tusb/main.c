@@ -26,7 +26,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
+#include "board_api.h"
 #include "tusb_config.h"
 #include "tusb.h"
 #include "usbd.h"
@@ -56,7 +56,7 @@ void cdc_task(void);
 int main(void)
 {
   board_init();
-  
+
 
   // init device stack on configured roothub port
   tud_init(BOARD_TUD_RHPORT);
@@ -65,7 +65,7 @@ int main(void)
   while (1)
   {
     tud_task(); // tinyusb device task
-  
+
     cdc_task();
   }
 }

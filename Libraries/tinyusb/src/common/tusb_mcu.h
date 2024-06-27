@@ -383,7 +383,16 @@
 #elif TU_CHECK_MCU(OPT_MCU_CH32V307)
   #define TUP_DCD_ENDPOINT_MAX    16
   #define TUP_RHPORT_HIGHSPEED    1
+
+//--------------------------------------------------------------------+
+// Analog Devices
+//--------------------------------------------------------------------+
+#elif TU_CHECK_MCU(OPT_MCU_MAX32690)
+  #define TUP_DCD_ENDPOINT_MAX    12
+
 #endif
+
+
 
 
 //--------------------------------------------------------------------+

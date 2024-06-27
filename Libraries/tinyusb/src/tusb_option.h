@@ -174,6 +174,9 @@
 // NXP LPC MCX
 #define OPT_MCU_MCXN9            2300  ///< NXP MCX N9 Series
 
+// Analog Device MAX32xxx
+#define OPT_MCU_MAX32690         2400  ///< ADI MAX32 Series
+
 // Helper to check if configured MCU is one of listed
 // Apply _TU_CHECK_MCU with || as separator to list of input
 #define _TU_CHECK_MCU(_m)   (CFG_TUSB_MCU == _m)

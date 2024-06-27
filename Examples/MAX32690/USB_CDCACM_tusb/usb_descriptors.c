@@ -125,6 +125,16 @@ enum {
   #define EPNUM_MSC_OUT     0x04
   #define EPNUM_MSC_IN      0x85
 
+#elif CFG_TUSB_MCU == OPT_MCU_MAX32690
+  // MAX32 currently doesn't support a same endpoint number with different direction IN and OUT
+  //    e.g EP1 OUT & EP1 IN cannot exist together
+  #define EPNUM_CDC_NOTIF   0x81
+  #define EPNUM_CDC_OUT     0x02
+  #define EPNUM_CDC_IN      0x83
+
+  #define EPNUM_MSC_OUT     0x04
+  #define EPNUM_MSC_IN      0x85
+
 #else
   #define EPNUM_CDC_NOTIF   0x81
   #define EPNUM_CDC_OUT     0x02
@@ -261,7 +271,7 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
       break;
 
     case STRID_SERIAL:
-      memcpy(_desc_str + 1, (uint8_t){1,2,3,4,5,6,7,8}, 8);
+      memcpy(_desc_str + 1, "12345678", 9);
 
       chr_count = 8;
       // chr_count = board_usb_get_serial(_desc_str + 1, 32);

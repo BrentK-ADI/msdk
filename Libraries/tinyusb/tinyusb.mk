@@ -32,7 +32,7 @@
  ###############################################################################
 
 ################################################################################
-# This file can be included in a project makefile to build the library for the 
+# This file can be included in a project makefile to build the library for the
 # project.
 ###############################################################################
 
@@ -84,7 +84,7 @@ VPATH += ${LIB_TUSB_DIR}src/class/video
 VPATH += ${LIB_TUSB_DIR}src/portable/${TARGET_UC}
 VPATH += ${LIB_TUSB_DIR}hw/bsp
 
-SRCS += ${LIB_TUSB_DIR}/src/portable/${TARGET_UC}/dcd_${TARGET_LC}.c
+SRCS += ${LIB_TUSB_DIR}/src/portable/${TARGET_UC}/dcd_max32.c
 SRCS += ${LIB_TUSB_DIR}/src/device/usbd.c
 SRCS += ${TINYUSB_SRC_C}
 SRCS += ${LIB_TUSB_DIR}hw/bsp/board.c
